@@ -84,16 +84,32 @@ add_filter( 'cf7_slack_alerts_message', function ( $message, $severity, $details
 
 ## Releasing
 
-Versions live in two places in `cf7-slack-error-alerts.php`: the `Version:`
-header and the `VERSION` constant. CI fails if they disagree, or if either
-disagrees with the tag.
+The version lives in three places that must agree: the `Version:` header and the
+`VERSION` constant in `cf7-slack-error-alerts.php`, and a `## [x.y.z]` heading in
+`CHANGELOG.md`. CI fails if the first two disagree, or if either disagrees with
+the tag. `bin/bump.sh` moves all three together:
 
 ```bash
-# 1. Bump both version strings and add a CHANGELOG.md section for the release.
-# 2. Commit, then tag:
-git tag v1.1.0
-git push origin main --tags
+bin/bump.sh patch          # 1.1.0 -> 1.1.1
+bin/bump.sh minor          # 1.1.0 -> 1.2.0
+bin/bump.sh major          # 1.1.0 -> 2.0.0
+bin/bump.sh 2.0.0-beta.1   # or set one explicitly
 ```
+
+Options: `--dry-run` to preview, `--commit` to commit as
+`chore(release): vX.Y.Z`, `--tag` to also create the annotated tag. Nothing is
+ever pushed — pushing the tag is what triggers a release.
+
+The usual flow is to write the release notes under `## [Unreleased]` as you go,
+then:
+
+```bash
+bin/bump.sh minor --tag                  # Unreleased becomes ## [1.2.0]
+git push origin main --follow-tags
+```
+
+Bump levels follow semver, including prereleases: `1.2.0-beta.1` plus a `patch`
+or `minor` bump releases `1.2.0` rather than skipping past it.
 
 The `Release` workflow then verifies the versions, lints, builds
 `dist/cf7-slack-error-alerts.zip`, and publishes a GitHub Release with that zip

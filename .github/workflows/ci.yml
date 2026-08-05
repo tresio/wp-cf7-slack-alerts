@@ -40,6 +40,13 @@ jobs:
       - name: Header and constant agree
         run: bash bin/version.sh check
 
+      - name: Release scripts are syntactically valid
+        run: |
+          for script in bin/*.sh; do
+            bash -n "$script"
+          done
+          shellcheck -S warning bin/*.sh
+
   package:
     name: Build zip
     runs-on: ubuntu-latest
