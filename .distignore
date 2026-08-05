@@ -1,0 +1,13 @@
+.git
+.github
+.gitignore
+.distignore
+.DS_Store
+bin
+build
+dist
+node_modules
+tests
+CHANGELOG.md
+CONTRIBUTING.md
+*.zip

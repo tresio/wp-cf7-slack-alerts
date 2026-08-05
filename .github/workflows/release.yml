@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version from the tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Plugin version matches the tag
+        run: bash bin/version.sh check "${{ steps.version.outputs.version }}"
+
+      # The 7.2 minimum is enforced by the CI matrix on every push to main;
+      # this is a last-second guard against a broken tag, so it uses whichever
+      # PHP the runner already has rather than risking a toolchain install.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: none
+
+      - name: Lint
+        run: find . -name '*.php' -print0 | xargs -0 -n1 -P4 php -l
+
+      - name: Build
+        run: bash bin/build.sh "${{ steps.version.outputs.version }}"
+
+      - name: Extract release notes from CHANGELOG.md
+        id: notes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if awk -v v="$VERSION" '
+                $0 ~ "^## \\[?" v "\\]?" { found = 1; next }
+                found && /^## / { exit }
+                found { print }
+              ' CHANGELOG.md > release-notes.md && [ -s release-notes.md ]; then
+            echo "have_notes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have_notes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARGS=(
+            "${{ steps.version.outputs.tag }}"
+            dist/cf7-slack-error-alerts.zip
+            --title "${{ steps.version.outputs.tag }}"
+          )
+
+          if [ "${{ steps.notes.outputs.have_notes }}" = "true" ]; then
+            ARGS+=(--notes-file release-notes.md)
+          else
+            ARGS+=(--generate-notes)
+          fi
+
+          if [[ "${{ steps.version.outputs.version }}" == *-* ]]; then
+            ARGS+=(--prerelease)
+          fi
+
+          gh release create "${ARGS[@]}"

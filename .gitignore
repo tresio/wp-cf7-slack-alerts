@@ -1,0 +1,6 @@
+.DS_Store
+/build/
+/dist/
+/vendor/
+/node_modules/
+*.zip

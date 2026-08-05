@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: PHP ${{ matrix.php }} syntax
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.2', '7.4', '8.0', '8.2', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: none
+
+      - name: Lint every PHP file
+        run: |
+          find . -path ./node_modules -prune -o -name '*.php' -print0 \
+            | xargs -0 -n1 -P4 php -l
+
+  version:
+    name: Version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Header and constant agree
+        run: bash bin/version.sh check
+
+  package:
+    name: Build zip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: bash bin/build.sh
+
+      - name: Confirm the archive has a single correctly named root folder
+        run: |
+          ROOTS=$(unzip -Z1 dist/cf7-slack-error-alerts.zip | cut -d/ -f1 | sort -u)
+          if [ "$ROOTS" != "cf7-slack-error-alerts" ]; then
+            echo "::error::Unexpected archive layout: $ROOTS"
+            exit 1
+          fi
+          unzip -Z1 dist/cf7-slack-error-alerts.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cf7-slack-error-alerts
+          path: dist/cf7-slack-error-alerts.zip
+          if-no-files-found: error
