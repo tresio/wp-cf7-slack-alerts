@@ -3,7 +3,7 @@
  * Plugin Name:       CF7 Slack Error Alerts
  * Plugin URI:        https://github.com/tresio/wp-cf7-slack-alerts
  * Description:       Sends a Slack notification when a Contact Form 7 form errors — mail failure (red), captcha/spam rejection (orange), or validation (orange). Also catches any wp_mail() failure as a safety net for WP Mail SMTP issues.
- * Version:           1.1.0
+ * Version:           1.2.0
  * Requires at least: 5.3
  * Requires PHP:      7.2
  * Author:            Studio 3 Enterprise
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const VERSION     = '1.1.0';
+const VERSION     = '1.2.0';
 const OPTION_KEY  = 'cf7_slack_alerts_settings';
 const GITHUB_REPO = 'tresio/wp-cf7-slack-alerts';
 

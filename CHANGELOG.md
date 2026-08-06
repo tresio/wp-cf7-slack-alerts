@@ -6,6 +6,8 @@ All notable changes to this plugin are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0]
+
 ## [1.1.0]
 
 ### Security
