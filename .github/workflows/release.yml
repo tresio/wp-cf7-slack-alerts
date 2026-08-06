@@ -45,14 +45,21 @@ jobs:
         id: notes
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          if awk -v v="$VERSION" '
+          awk -v v="$VERSION" '
                 $0 ~ "^## \\[?" v "\\]?" { found = 1; next }
                 found && /^## / { exit }
                 found { print }
-              ' CHANGELOG.md > release-notes.md && [ -s release-notes.md ]; then
+              ' CHANGELOG.md > release-notes.md
+
+          # A heading that exists but has nothing under it yields a file of
+          # blank lines. That is still "non-empty" to test -s, which would
+          # publish a release with no notes at all instead of falling back.
+          if grep -q '[^[:space:]]' release-notes.md; then
             echo "have_notes=true" >> "$GITHUB_OUTPUT"
+            echo "Using CHANGELOG.md section for $VERSION"
           else
             echo "have_notes=false" >> "$GITHUB_OUTPUT"
+            echo "No CHANGELOG.md content for $VERSION; generating notes from commits"
           fi
 
       - name: Publish the release
