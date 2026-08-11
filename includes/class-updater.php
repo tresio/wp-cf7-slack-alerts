@@ -61,6 +61,10 @@ class Updater {
 	 * @return void
 	 */
 	public function boot() {
+		// Priority 1 so this beats core's own wp_update_plugins() callback on
+		// the same hook, which core registered first and which would otherwise
+		// read our cache before we had a chance to drop it.
+		add_action( 'load-update-core.php', array( $this, 'flush_on_force_check' ), 1 );
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'inject_update' ) );
 		add_filter( 'plugins_api', array( $this, 'plugin_details' ), 10, 3 );
 		add_filter( 'upgrader_source_selection', array( $this, 'fix_source_directory' ), 10, 4 );
@@ -193,6 +197,25 @@ class Updater {
 		}
 
 		return trailingslashit( $desired );
+	}
+
+	/**
+	 * Honour the "Check Again" button on Dashboard -> Updates.
+	 *
+	 * That button clears core's update transient, but our own release cache
+	 * would still be served for up to 12 hours — so a release published
+	 * moments ago would not show up, which is precisely when someone clicks it.
+	 *
+	 * @return void
+	 */
+	public function flush_on_force_check() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only flag set by core's own link.
+		if ( empty( $_GET['force-check'] ) || ! current_user_can( 'update_plugins' ) ) {
+			return;
+		}
+
+		delete_transient( self::TRANSIENT );
+		delete_transient( self::TRANSIENT . '_backoff' );
 	}
 
 	/**

@@ -113,8 +113,19 @@ or `minor` bump releases `1.2.0` rather than skipping past it.
 
 The `Release` workflow then verifies the versions, lints, builds
 `dist/cf7-slack-error-alerts.zip`, and publishes a GitHub Release with that zip
-attached. Sites pick it up within 12 hours, or immediately via
-**Dashboard → Updates → Check again**.
+attached.
+
+### How often sites check
+
+WordPress decides when to ask for plugin updates: on a twice-daily cron, on any
+admin page at most every 12 hours, and on the Plugins or Updates screens at most
+hourly. This plugin then caches the GitHub release lookup for 12 hours on top of
+that, so GitHub sees at most about two requests per day per site — well inside
+the unauthenticated rate limit. A failed lookup backs off for an hour.
+
+In practice a new release lands on a site within 12 hours. To get it
+immediately, use **Dashboard → Updates → Check Again**, which clears both
+caches and re-queries GitHub straight away.
 
 Tags containing a hyphen (`v1.2.0-beta.1`) are published as prereleases, which
 GitHub excludes from `releases/latest` — so sites are never offered them.
