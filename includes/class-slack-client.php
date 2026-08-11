@@ -223,7 +223,34 @@ class Slack_Client {
 	private function fail( $error ) {
 		return array(
 			'ok'    => false,
-			'error' => (string) $error,
+			'error' => $this->redact( (string) $error ),
 		);
+	}
+
+	/**
+	 * Strip credentials out of an error string.
+	 *
+	 * Transport errors can quote the URL that was being requested, and these
+	 * strings get stored in an option and printed on the settings screen. A
+	 * webhook URL is itself the credential, so it must never survive that trip.
+	 *
+	 * @param string $text Error text, possibly containing a secret.
+	 * @return string
+	 */
+	private function redact( $text ) {
+		foreach ( array( 'webhook_url', 'bot_token' ) as $key ) {
+			$secret = trim( (string) $this->settings->get( $key ) );
+
+			if ( '' !== $secret ) {
+				$text = str_replace( $secret, '[redacted]', $text );
+			}
+		}
+
+		// Catch credentials that are not the currently stored ones, such as a
+		// value mid-rotation or one injected by a filter.
+		$text = preg_replace( '#https://hooks\.slack\.com/services/\S+#i', 'https://hooks.slack.com/services/[redacted]', $text );
+		$text = preg_replace( '#\bxox[abeoprs]-[A-Za-z0-9-]+#', '[redacted]', $text );
+
+		return $text;
 	}
 }
