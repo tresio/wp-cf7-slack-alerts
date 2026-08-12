@@ -3,4 +3,7 @@
 /dist/
 /vendor/
 /node_modules/
+composer.lock
 *.zip
+.phpunit.result.cache
+.phpunit.cache

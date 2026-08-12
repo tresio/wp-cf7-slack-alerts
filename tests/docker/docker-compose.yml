@@ -1,0 +1,62 @@
+# Containers for the WordPress-dependent test tiers.
+#
+# /var/www/html is a named volume rather than a host bind. That matters: on
+# Docker Desktop, bind-mounting the plugin *inside* another host bind mount
+# silently yields an empty directory, whereas nesting inside a named volume
+# works. The integration override relies on this.
+
+name: cf7sa-tests
+
+services:
+  db:
+    image: mariadb:lts
+    environment:
+      MARIADB_ROOT_PASSWORD: wordpress
+      MARIADB_DATABASE: wordpress
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
+  wordpress:
+    image: wordpress:${CF7SA_WP_IMAGE:-php8.2-apache}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: root
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DEBUG: 1
+      # FS_METHOD direct is what lets the updater write files without asking
+      # for FTP credentials, which is how a real unattended update runs.
+      WORDPRESS_CONFIG_EXTRA: |
+        define( 'WP_DEBUG_LOG', '/var/www/html/wp-content/debug.log' );
+        define( 'WP_DEBUG_DISPLAY', false );
+        define( 'FS_METHOD', 'direct' );
+    ports:
+      - "${CF7SA_WP_PORT:-8765}:80"
+    volumes:
+      - html:/var/www/html
+
+  cli:
+    image: wordpress:cli-php8.2
+    depends_on:
+      - wordpress
+    user: "33:33"
+    entrypoint: [ "tail", "-f", "/dev/null" ]
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: root
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress_test
+      WP_TESTS_ABSPATH: /var/www/html/
+    volumes:
+      - html:/var/www/html
+
+volumes:
+  html:

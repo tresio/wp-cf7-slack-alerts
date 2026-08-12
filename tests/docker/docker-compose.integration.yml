@@ -1,0 +1,13 @@
+# Mounts the working copy in as the plugin, so integration tests run against
+# whatever is checked out rather than a released build.
+
+services:
+  wordpress:
+    volumes:
+      - html:/var/www/html
+      - ../..:/var/www/html/wp-content/plugins/cf7-slack-error-alerts
+
+  cli:
+    volumes:
+      - html:/var/www/html
+      - ../..:/var/www/html/wp-content/plugins/cf7-slack-error-alerts

@@ -152,6 +152,79 @@ To build locally:
 bash bin/build.sh
 ```
 
+## Testing
+
+Sites can update this plugin unattended, so a bad release breaks somebody else's
+site without anyone watching. The suite is built around that risk in three
+tiers.
+
+```bash
+composer install
+
+composer test                  # unit — no WordPress, no database, ~0.3s
+bash tests/run-integration.sh  # real WordPress in Docker
+bash tests/run-e2e.sh          # a real unattended update, end to end
+```
+
+Docker is needed for the last two. Pass `--keep` to either to leave the
+containers up for poking at.
+
+| Tier | What it runs against | Catches |
+| --- | --- | --- |
+| Unit | Plugin classes, WordPress faked | Sanitization, payload building, throttling, redaction, updater logic |
+| Integration | Real WordPress + MySQL | Hooks not registered, settings not persisting, the update transient not populating |
+| End to end | A real site, a real release | An update that white-screens a site, loses settings, or installs a second copy |
+
+### The end-to-end tier
+
+This is the one that answers "will an auto-update break a live site". It
+installs the *previous* published release into a real WordPress, seeds settings,
+then runs WordPress's own updater against the real GitHub release. Nothing is
+mocked. Afterwards it checks the site still returns 200, the plugin is still
+active on the new version, the settings survived, no fatals were logged, and
+exactly one copy exists on disk.
+
+It runs twice: once installed under the folder name the release zip carries,
+and once under the repository name, which is what a `git clone` install looks
+like. The second case is where a GitHub-based updater usually fails, by
+installing a second copy and silently leaving the site on old code.
+
+Because it upgrades between the two most recent releases, it needs at least two
+published releases to run.
+
+### On pull requests
+
+Every tier runs on pull requests against `main`, and `main` is protected so a
+pull request cannot merge until they pass.
+
+Branch protection requires a single check named **CI**, which is an aggregating
+job that depends on all the others. Requiring the individual jobs instead means
+a renamed job quietly stops being required, and a job added later is not gated
+until someone remembers to update the branch rule.
+
+The end-to-end tier has a third scenario specifically for this: the first two
+upgrade between published releases, which on a pull request proves nothing about
+the code being proposed, so the third builds the branch and upgrades a live site
+onto *that*.
+
+`enforce_admins` is deliberately off. Requiring checks on `main` otherwise
+blocks direct pushes to it, which would break `bin/bump.sh --tag` followed by
+`git push origin main --follow-tags`. Pull requests are still gated for
+everyone; an admin can push a release commit straight to `main`.
+
+### Cross-version
+
+Unit tests run on PHP 7.2 through 8.4 in CI, not just the newest. 7.2 is the
+floor the plugin header claims, and an unattended update pushes code to
+whatever PHP a site happens to run. Composer resolves PHPUnit per version (8.5
+on 7.2, 9.6 above), so no lock file is committed.
+
+### Docker note
+
+`/var/www/html` is a named volume rather than a host bind. Bind-mounting the
+plugin *inside* another bind mount silently yields an empty directory on Docker
+Desktop, which is why `wp-env` cannot be used here.
+
 ## Requirements
 
 WordPress 5.3+, PHP 7.2+, Contact Form 7.

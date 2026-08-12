@@ -4,19 +4,27 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  lint:
-    name: PHP ${{ matrix.php }} syntax
+  unit:
+    name: Unit / PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        php: ['7.2', '7.4', '8.0', '8.2', '8.3']
+        # 7.2 is the floor the plugin header claims. Running the suite there,
+        # rather than only linting, is what proves an unattended update cannot
+        # push code a site's PHP cannot execute.
+        php: ['7.2', '7.4', '8.0', '8.2', '8.3', '8.4']
     steps:
       - uses: actions/checkout@v4
 
@@ -24,12 +32,20 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
-          tools: none
+          tools: composer
 
       - name: Lint every PHP file
         run: |
-          find . -path ./node_modules -prune -o -name '*.php' -print0 \
+          find . -path ./vendor -prune -o -name '*.php' -print0 \
             | xargs -0 -n1 -P4 php -l
+
+      # No lock file is committed, so each PHP version resolves the PHPUnit it
+      # can actually run (8.5 on 7.2, 9.6 above).
+      - name: Install dependencies
+        run: composer update --no-interaction --prefer-dist --no-progress
+
+      - name: Unit tests
+        run: vendor/bin/phpunit --configuration phpunit.xml.dist
 
   version:
     name: Version consistency
@@ -40,12 +56,48 @@ jobs:
       - name: Header and constant agree
         run: bash bin/version.sh check
 
+      # A workflow that is valid YAML can still be rejected by Actions, which
+      # then runs no jobs at all — so the branch protection check never
+      # reports and pull requests wait forever. actionlint catches that here.
+      - name: Workflows are valid
+        run: |
+          curl -fsSL -o actionlint.bash \
+            https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash
+          bash actionlint.bash >/dev/null
+          ./actionlint -color
+
+      # macOS is case-insensitive, so a path referenced with the wrong case
+      # works locally and vanishes on the Linux runner. That is how
+      # tests/integration/run.sh shipped pointing at tests/Integration/run.sh.
+      - name: No paths differing only by case
+        run: |
+          DUPES=$(git ls-files | tr '[:upper:]' '[:lower:]' | sort | uniq -d)
+          if [ -n "$DUPES" ]; then
+            echo "::error::Paths collide when compared case-insensitively:"
+            echo "$DUPES"
+            exit 1
+          fi
+          echo "No case-colliding paths."
+
+      - name: Every referenced script exists
+        run: |
+          MISSING=0
+          for script in tests/run-integration.sh tests/run-e2e.sh \
+                        tests/docker/lib.sh tests/docker/resolve-releases.py \
+                        bin/build.sh bin/version.sh bin/bump.sh; do
+            if [ ! -f "$script" ]; then
+              echo "::error::Missing: $script"
+              MISSING=1
+            fi
+          done
+          [ "$MISSING" -eq 0 ]
+
       - name: Release scripts are syntactically valid
         run: |
-          for script in bin/*.sh; do
-            bash -n "$script"
+          for script in bin/*.sh tests/**/*.sh; do
+            [ -f "$script" ] && bash -n "$script"
           done
-          shellcheck -S warning bin/*.sh
+          shellcheck -S warning bin/*.sh tests/docker/lib.sh tests/run-integration.sh tests/run-e2e.sh
 
   package:
     name: Build zip
@@ -63,10 +115,69 @@ jobs:
             echo "::error::Unexpected archive layout: $ROOTS"
             exit 1
           fi
-          unzip -Z1 dist/cf7-slack-error-alerts.zip
+
+      - name: Confirm no development files were shipped
+        run: |
+          if unzip -Z1 dist/cf7-slack-error-alerts.zip | grep -qE 'tests/|vendor/|\.github/|bin/|composer\.'; then
+            echo "::error::Development files leaked into the release zip"
+            unzip -Z1 dist/cf7-slack-error-alerts.zip
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: cf7-slack-error-alerts
           path: dist/cf7-slack-error-alerts.zip
           if-no-files-found: error
+
+  integration:
+    name: WordPress integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer
+
+      - name: Install dependencies
+        run: composer update --no-interaction --prefer-dist --no-progress
+
+      - name: Run against real WordPress
+        run: bash tests/run-integration.sh
+
+  e2e:
+    name: Unattended update
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Installs the previous published release, then runs WordPress's own
+      # updater against the real GitHub release and checks the site survived.
+      - name: Upgrade a real site to the current release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash tests/run-e2e.sh
+
+  # Single required check for branch protection. Requiring the individual jobs
+  # instead means a renamed job silently stops being required, and a job added
+  # later is not gated until someone remembers to update the branch rule.
+  gate:
+    name: CI
+    if: always()
+    needs: [ unit, version, package, integration, e2e ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job to have succeeded
+        run: |
+          RESULTS='${{ join(needs.*.result, ',') }}'
+          echo "Job results: $RESULTS"
+          case ",$RESULTS," in
+            *,failure,*|*,cancelled,*)
+              echo "::error::A required job did not succeed"
+              exit 1
+              ;;
+          esac
+          echo "All required jobs succeeded."

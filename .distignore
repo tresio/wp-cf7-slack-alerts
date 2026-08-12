@@ -6,8 +6,15 @@
 bin
 build
 dist
-node_modules
 tests
+vendor
+node_modules
+composer.json
+composer.lock
+phpunit.xml.dist
+phpunit-integration.xml.dist
 CHANGELOG.md
 CONTRIBUTING.md
 *.zip
+.phpunit.result.cache
+.phpunit.cache
