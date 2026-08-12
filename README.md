@@ -162,8 +162,8 @@ tiers.
 composer install
 
 composer test                  # unit — no WordPress, no database, ~0.3s
-bash tests/integration/run.sh  # real WordPress in Docker
-bash tests/e2e/run.sh          # a real unattended update, end to end
+bash tests/run-integration.sh  # real WordPress in Docker
+bash tests/run-e2e.sh          # a real unattended update, end to end
 ```
 
 Docker is needed for the last two. Pass `--keep` to either to leave the

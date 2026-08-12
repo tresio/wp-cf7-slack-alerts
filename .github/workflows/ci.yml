@@ -66,12 +66,38 @@ jobs:
           bash actionlint.bash >/dev/null
           ./actionlint -color
 
+      # macOS is case-insensitive, so a path referenced with the wrong case
+      # works locally and vanishes on the Linux runner. That is how
+      # tests/integration/run.sh shipped pointing at tests/Integration/run.sh.
+      - name: No paths differing only by case
+        run: |
+          DUPES=$(git ls-files | tr '[:upper:]' '[:lower:]' | sort | uniq -d)
+          if [ -n "$DUPES" ]; then
+            echo "::error::Paths collide when compared case-insensitively:"
+            echo "$DUPES"
+            exit 1
+          fi
+          echo "No case-colliding paths."
+
+      - name: Every referenced script exists
+        run: |
+          MISSING=0
+          for script in tests/run-integration.sh tests/run-e2e.sh \
+                        tests/docker/lib.sh tests/docker/resolve-releases.py \
+                        bin/build.sh bin/version.sh bin/bump.sh; do
+            if [ ! -f "$script" ]; then
+              echo "::error::Missing: $script"
+              MISSING=1
+            fi
+          done
+          [ "$MISSING" -eq 0 ]
+
       - name: Release scripts are syntactically valid
         run: |
           for script in bin/*.sh tests/**/*.sh; do
             [ -f "$script" ] && bash -n "$script"
           done
-          shellcheck -S warning bin/*.sh tests/docker/lib.sh tests/integration/run.sh tests/e2e/run.sh
+          shellcheck -S warning bin/*.sh tests/docker/lib.sh tests/run-integration.sh tests/run-e2e.sh
 
   package:
     name: Build zip
@@ -120,7 +146,7 @@ jobs:
         run: composer update --no-interaction --prefer-dist --no-progress
 
       - name: Run against real WordPress
-        run: bash tests/integration/run.sh
+        run: bash tests/run-integration.sh
 
   e2e:
     name: Unattended update
@@ -133,7 +159,7 @@ jobs:
       - name: Upgrade a real site to the current release
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: bash tests/e2e/run.sh
+        run: bash tests/run-e2e.sh
 
   # Single required check for branch protection. Requiring the individual jobs
   # instead means a renamed job silently stops being required, and a job added

@@ -2,12 +2,12 @@
 #
 # Runs the PHPUnit integration suite inside a real WordPress.
 #
-# Usage: tests/integration/run.sh [--keep]
+# Usage: tests/run-integration.sh [--keep]
 #   --keep  leave the containers running afterwards
 
 set -euo pipefail
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../docker" && pwd)/lib.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/docker" && pwd)/lib.sh"
 
 # Consumed by tests/docker/lib.sh, which is sourced above.
 # shellcheck disable=SC2034

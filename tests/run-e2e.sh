@@ -7,11 +7,11 @@
 # mocked: the plugin's updater does the release lookup, WordPress downloads and
 # unpacks the asset, and the assertions check the site afterwards.
 #
-# Usage: tests/e2e/run.sh [--keep]
+# Usage: tests/run-e2e.sh [--keep]
 
 set -euo pipefail
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../docker" && pwd)/lib.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/docker" && pwd)/lib.sh"
 
 # These three are read and updated by tests/docker/lib.sh, sourced above.
 # shellcheck disable=SC2034
@@ -39,7 +39,7 @@ trap cleanup EXIT
 
 say "Resolving releases from GitHub"
 RELEASES_URL="https://api.github.com/repos/$REPO/releases?per_page=20"
-RESOLVER="$(dirname "${BASH_SOURCE[0]}")/resolve-releases.py"
+RESOLVER="$(dirname "${BASH_SOURCE[0]}")/docker/resolve-releases.py"
 
 # Unauthenticated GitHub API calls from shared CI runners hit rate limits, so
 # use a token when one is available. Written as two branches rather than an
