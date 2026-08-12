@@ -66,19 +66,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ARGS=(
-            "${{ steps.version.outputs.tag }}"
-            dist/cf7-slack-error-alerts.zip
-            --title "${{ steps.version.outputs.tag }}"
-          )
+          TAG='${{ steps.version.outputs.tag }}'
+          VERSION='${{ steps.version.outputs.version }}'
+          HAVE_NOTES='${{ steps.notes.outputs.have_notes }}'
 
-          if [ "${{ steps.notes.outputs.have_notes }}" = "true" ]; then
+          ARGS=( "$TAG" dist/cf7-slack-error-alerts.zip --title "$TAG" )
+
+          if [ "$HAVE_NOTES" = "true" ]; then
             ARGS+=(--notes-file release-notes.md)
           else
             ARGS+=(--generate-notes)
           fi
 
-          if [[ "${{ steps.version.outputs.version }}" == *-* ]]; then
+          if [[ "$VERSION" == *-* ]]; then
             ARGS+=(--prerelease)
           fi
 

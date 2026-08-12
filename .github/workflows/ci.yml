@@ -56,6 +56,16 @@ jobs:
       - name: Header and constant agree
         run: bash bin/version.sh check
 
+      # A workflow that is valid YAML can still be rejected by Actions, which
+      # then runs no jobs at all — so the branch protection check never
+      # reports and pull requests wait forever. actionlint catches that here.
+      - name: Workflows are valid
+        run: |
+          curl -fsSL -o actionlint.bash \
+            https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash
+          bash actionlint.bash >/dev/null
+          ./actionlint -color
+
       - name: Release scripts are syntactically valid
         run: |
           for script in bin/*.sh tests/**/*.sh; do
@@ -136,7 +146,7 @@ jobs:
     steps:
       - name: Require every job to have succeeded
         run: |
-          RESULTS='${{ join(needs.*.result, ",") }}'
+          RESULTS='${{ join(needs.*.result, ',') }}'
           echo "Job results: $RESULTS"
           case ",$RESULTS," in
             *,failure,*|*,cancelled,*)
