@@ -152,6 +152,59 @@ To build locally:
 bash bin/build.sh
 ```
 
+## Testing
+
+Sites can update this plugin unattended, so a bad release breaks somebody else's
+site without anyone watching. The suite is built around that risk in three
+tiers.
+
+```bash
+composer install
+
+composer test                  # unit — no WordPress, no database, ~0.3s
+bash tests/integration/run.sh  # real WordPress in Docker
+bash tests/e2e/run.sh          # a real unattended update, end to end
+```
+
+Docker is needed for the last two. Pass `--keep` to either to leave the
+containers up for poking at.
+
+| Tier | What it runs against | Catches |
+| --- | --- | --- |
+| Unit | Plugin classes, WordPress faked | Sanitization, payload building, throttling, redaction, updater logic |
+| Integration | Real WordPress + MySQL | Hooks not registered, settings not persisting, the update transient not populating |
+| End to end | A real site, a real release | An update that white-screens a site, loses settings, or installs a second copy |
+
+### The end-to-end tier
+
+This is the one that answers "will an auto-update break a live site". It
+installs the *previous* published release into a real WordPress, seeds settings,
+then runs WordPress's own updater against the real GitHub release. Nothing is
+mocked. Afterwards it checks the site still returns 200, the plugin is still
+active on the new version, the settings survived, no fatals were logged, and
+exactly one copy exists on disk.
+
+It runs twice: once installed under the folder name the release zip carries,
+and once under the repository name, which is what a `git clone` install looks
+like. The second case is where a GitHub-based updater usually fails, by
+installing a second copy and silently leaving the site on old code.
+
+Because it upgrades between the two most recent releases, it needs at least two
+published releases to run.
+
+### Cross-version
+
+Unit tests run on PHP 7.2 through 8.4 in CI, not just the newest. 7.2 is the
+floor the plugin header claims, and an unattended update pushes code to
+whatever PHP a site happens to run. Composer resolves PHPUnit per version (8.5
+on 7.2, 9.6 above), so no lock file is committed.
+
+### Docker note
+
+`/var/www/html` is a named volume rather than a host bind. Bind-mounting the
+plugin *inside* another bind mount silently yields an empty directory on Docker
+Desktop, which is why `wp-env` cannot be used here.
+
 ## Requirements
 
 WordPress 5.3+, PHP 7.2+, Contact Form 7.
