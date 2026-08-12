@@ -66,6 +66,7 @@ class Settings {
 			'throttle_seconds'  => 60,
 			'blocking'          => 0,
 			'auto_update_check' => 1,
+			'auto_update'       => 0,
 		);
 	}
 
@@ -269,6 +270,7 @@ class Settings {
 		$out['include_submitter'] = empty( $input['include_submitter'] ) ? 0 : 1;
 		$out['blocking']          = empty( $input['blocking'] ) ? 0 : 1;
 		$out['auto_update_check'] = empty( $input['auto_update_check'] ) ? 0 : 1;
+		$out['auto_update']       = empty( $input['auto_update'] ) ? 0 : 1;
 
 		$throttle                = isset( $input['throttle_seconds'] ) ? absint( $input['throttle_seconds'] ) : $defaults['throttle_seconds'];
 		$out['throttle_seconds'] = min( 3600, $throttle );
@@ -545,7 +547,14 @@ class Settings {
 							<label>
 								<input type="checkbox" name="<?php echo esc_attr( OPTION_KEY ); ?>[auto_update_check]" value="1" <?php checked( ! empty( $s['auto_update_check'] ) ); ?>>
 								<?php esc_html_e( 'Check GitHub for new releases of this plugin', 'cf7-slack-error-alerts' ); ?>
+							</label><br>
+							<label>
+								<input type="checkbox" name="<?php echo esc_attr( OPTION_KEY ); ?>[auto_update]" value="1" <?php checked( ! empty( $s['auto_update'] ) ); ?>>
+								<?php esc_html_e( 'Install those updates automatically, without asking', 'cf7-slack-error-alerts' ); ?>
 							</label>
+							<p class="description">
+								<?php esc_html_e( 'Leave this off to review each update yourself on the Plugins screen. WordPress runs unattended updates on its twice-daily cron, so an automatic update lands within about 12 hours of release.', 'cf7-slack-error-alerts' ); ?>
+							</p>
 							<p class="description">
 								<?php
 								printf(

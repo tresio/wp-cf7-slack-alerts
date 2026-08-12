@@ -127,6 +127,22 @@ In practice a new release lands on a site within 12 hours. To get it
 immediately, use **Dashboard → Updates → Check Again**, which clears both
 caches and re-queries GitHub straight away.
 
+### Installing updates automatically
+
+Finding an update and installing it are separate things. By default the plugin
+only *offers* the update, and you click **update now** on the Plugins screen.
+
+For unattended updates, either:
+
+- tick **Install those updates automatically** in the plugin's settings, or
+- use WordPress's own **Enable auto-updates** link in the right-hand column of
+  the Plugins screen.
+
+The plugin's setting only ever turns auto-updates on. Left off, WordPress's own
+per-plugin toggle governs, so the two never fight. Unattended updates run on
+WordPress's twice-daily cron, so they land within roughly 12 hours of a release
+rather than instantly.
+
 Tags containing a hyphen (`v1.2.0-beta.1`) are published as prereleases, which
 GitHub excludes from `releases/latest` — so sites are never offered them.
 

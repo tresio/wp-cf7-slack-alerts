@@ -67,6 +67,7 @@ class Updater {
 		add_action( 'load-update-core.php', array( $this, 'flush_on_force_check' ), 1 );
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'inject_update' ) );
 		add_filter( 'plugins_api', array( $this, 'plugin_details' ), 10, 3 );
+		add_filter( 'auto_update_plugin', array( $this, 'maybe_auto_update' ), 10, 2 );
 		add_filter( 'upgrader_source_selection', array( $this, 'fix_source_directory' ), 10, 4 );
 		add_action( 'upgrader_process_complete', array( $this, 'flush_cache' ), 10, 2 );
 		add_filter( 'plugin_row_meta', array( $this, 'row_meta' ), 10, 2 );
@@ -197,6 +198,25 @@ class Updater {
 		}
 
 		return trailingslashit( $desired );
+	}
+
+	/**
+	 * Opt this plugin into unattended updates when the setting asks for it.
+	 *
+	 * Only ever turns updates on. Left off, the value passes through untouched
+	 * so the per-plugin toggle on the Plugins screen still governs, rather than
+	 * this setting silently overriding a choice made there.
+	 *
+	 * @param bool|null $update Whether WordPress intends to auto-update.
+	 * @param object    $item   The update offer being considered.
+	 * @return bool|null
+	 */
+	public function maybe_auto_update( $update, $item ) {
+		if ( empty( $item->plugin ) || $item->plugin !== $this->basename ) {
+			return $update;
+		}
+
+		return $this->settings->get( 'auto_update' ) ? true : $update;
 	}
 
 	/**
