@@ -192,6 +192,26 @@ installing a second copy and silently leaving the site on old code.
 Because it upgrades between the two most recent releases, it needs at least two
 published releases to run.
 
+### On pull requests
+
+Every tier runs on pull requests against `main`, and `main` is protected so a
+pull request cannot merge until they pass.
+
+Branch protection requires a single check named **CI**, which is an aggregating
+job that depends on all the others. Requiring the individual jobs instead means
+a renamed job quietly stops being required, and a job added later is not gated
+until someone remembers to update the branch rule.
+
+The end-to-end tier has a third scenario specifically for this: the first two
+upgrade between published releases, which on a pull request proves nothing about
+the code being proposed, so the third builds the branch and upgrades a live site
+onto *that*.
+
+`enforce_admins` is deliberately off. Requiring checks on `main` otherwise
+blocks direct pushes to it, which would break `bin/bump.sh --tag` followed by
+`git push origin main --follow-tags`. Pull requests are still gated for
+everyone; an admin can push a release commit straight to `main`.
+
 ### Cross-version
 
 Unit tests run on PHP 7.2 through 8.4 in CI, not just the newest. 7.2 is the

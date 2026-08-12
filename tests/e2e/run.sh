@@ -159,4 +159,48 @@ assert_equals "did not leave a second copy behind" \
 assert_equals "site still returns 200" \
 	"$(curl -sL -o /dev/null -w '%{http_code}' "http://localhost:$CF7SA_PORT/")" "200"
 
+# ---------------------------------------------------------------------------
+# Scenario 3: the branch under review.
+#
+# The two scenarios above upgrade between published releases, so on a pull
+# request they prove nothing about the code being proposed. This one upgrades a
+# site onto a build of the working tree, through the same WordPress upgrader
+# and the same source-selection filter, which is what will happen to every site
+# once this branch is released.
+# ---------------------------------------------------------------------------
+
+say "Scenario 3: updating a live site onto this branch's code"
+
+BRANCH_VERSION="$( bash "$CF7SA_ROOT/bin/version.sh" header )"
+bash "$CF7SA_ROOT/bin/build.sh" >/dev/null
+compose cp "$CF7SA_ROOT/dist/cf7-slack-error-alerts.zip" cli:/tmp/branch-build.zip
+
+wp plugin deactivate wp-cf7-slack-alerts >/dev/null 2>&1 || true
+wp plugin delete wp-cf7-slack-alerts >/dev/null 2>&1 || true
+
+wp plugin install "$PREVIOUS_URL" --activate >/dev/null
+wp option update cf7_slack_alerts_settings --format=json "$SEEDED_SETTINGS" >/dev/null
+assert_equals "back on $PREVIOUS_VERSION before the upgrade" \
+	"$(wp plugin get "$SLUG" --field=version | tr -d '\r')" "$PREVIOUS_VERSION"
+
+wp plugin install /tmp/branch-build.zip --force >/dev/null
+
+assert_equals "upgraded onto the branch build" \
+	"$(wp plugin get "$SLUG" --field=version | tr -d '\r')" "$BRANCH_VERSION"
+assert_equals "still active on the branch build" \
+	"$(wp plugin get "$SLUG" --field=status | tr -d '\r')" "active"
+assert_equals "no second copy from the branch build" \
+	"$(compose exec -T cli sh -c "ls -d $PLUGINS_DIR/*/ 2>/dev/null | grep -ci 'slack'" | tr -d '\r')" "1"
+
+BRANCH_SETTINGS="$(wp option get cf7_slack_alerts_settings --format=json | tr -d '\r')"
+assert_contains "settings survived the branch build" "$BRANCH_SETTINGS" "#e2e-canary"
+
+assert_equals "site still returns 200 on the branch build" \
+	"$(curl -sL -o /dev/null -w '%{http_code}' "http://localhost:$CF7SA_PORT/")" "200"
+assert_equals "branch code loads without fatals" \
+	"$(wp eval 'echo "loaded";' | tr -d '\r')" "loaded"
+
+BRANCH_FATALS="$(compose exec -T cli sh -c "grep -c 'Fatal error' $DEBUG_LOG 2>/dev/null || true" | tr -d '\r')"
+assert_equals "no fatals after the branch build" "${BRANCH_FATALS:-0}" "0"
+
 summarise

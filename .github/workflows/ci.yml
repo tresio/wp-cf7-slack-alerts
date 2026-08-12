@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -123,3 +124,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: bash tests/e2e/run.sh
+
+  # Single required check for branch protection. Requiring the individual jobs
+  # instead means a renamed job silently stops being required, and a job added
+  # later is not gated until someone remembers to update the branch rule.
+  gate:
+    name: CI
+    if: always()
+    needs: [ unit, version, package, integration, e2e ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job to have succeeded
+        run: |
+          RESULTS='${{ join(needs.*.result, ",") }}'
+          echo "Job results: $RESULTS"
+          case ",$RESULTS," in
+            *,failure,*|*,cancelled,*)
+              echo "::error::A required job did not succeed"
+              exit 1
+              ;;
+          esac
+          echo "All required jobs succeeded."
