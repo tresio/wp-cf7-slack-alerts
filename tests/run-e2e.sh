@@ -33,6 +33,7 @@ DEBUG_LOG=/var/www/html/wp-content/debug.log
 SEEDED_SETTINGS='{"transport":"webhook","webhook_url":"https://hooks.slack.com/services/T0E2E/B0E2E/canary","channel":"#e2e-canary","throttle_seconds":123,"events":{"mail_failed":1,"spam":1,"validation_failed":0,"aborted":1,"wp_mail_failed":1}}'
 
 cleanup() {
+	rm -f "${PREVIOUS_ZIP:-}"
 	[[ "$KEEP" == "1" ]] || stop_stack
 }
 trap cleanup EXIT
@@ -67,7 +68,17 @@ fi
 
 echo "upgrading $PREVIOUS_TAG -> $LATEST_TAG"
 
+say "Fetching the $PREVIOUS_TAG release once, on the host"
+PREVIOUS_ZIP="$(mktemp -t cf7sa-previous-XXXXXX).zip"
+curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors -o "$PREVIOUS_ZIP" "$PREVIOUS_URL"
+echo "$(wc -c <"$PREVIOUS_ZIP" | tr -d ' ') bytes"
+
 start_stack
+
+# Installing the fixture from a local file keeps a transient GitHub hiccup from
+# failing the run. The update under test still goes over the network, which is
+# the part worth exercising.
+compose cp "$PREVIOUS_ZIP" cli:/tmp/previous.zip
 
 say "Installing WordPress"
 wp core install \
@@ -84,7 +95,7 @@ wp core install \
 
 say "Scenario 1: update in the folder the release zip creates"
 
-wp plugin install "$PREVIOUS_URL" --activate >/dev/null
+wp plugin install /tmp/previous.zip --activate >/dev/null
 assert_equals "starts on $PREVIOUS_VERSION" "$(wp plugin get "$SLUG" --field=version | tr -d '\r')" "$PREVIOUS_VERSION"
 
 wp option update cf7_slack_alerts_settings --format=json "$SEEDED_SETTINGS" >/dev/null
@@ -92,8 +103,7 @@ wp option update cf7_slack_alerts_settings --format=json "$SEEDED_SETTINGS" >/de
 wp eval 'delete_site_transient( "update_plugins" ); delete_transient( "cf7sa_github_release" );' >/dev/null
 
 say "Running WordPress's updater"
-UPDATE_OUTPUT="$(wp plugin update "$SLUG" 2>&1 || true)"
-echo "$UPDATE_OUTPUT" | tail -5
+retry 3 wp plugin update "$SLUG" 2>&1 | tail -5 || true
 
 assert_equals "updated to $LATEST_VERSION" "$(wp plugin get "$SLUG" --field=version | tr -d '\r')" "$LATEST_VERSION"
 assert_equals "plugin still active" "$(wp plugin get "$SLUG" --field=status | tr -d '\r')" "active"
@@ -140,7 +150,7 @@ say "Scenario 2: update when the install folder does not match the zip"
 wp plugin deactivate "$SLUG" >/dev/null 2>&1 || true
 wp plugin delete "$SLUG" >/dev/null 2>&1 || true
 
-wp plugin install "$PREVIOUS_URL" >/dev/null
+wp plugin install /tmp/previous.zip >/dev/null
 compose exec -T cli mv "$PLUGINS_DIR/$SLUG" "$PLUGINS_DIR/wp-cf7-slack-alerts"
 wp plugin activate wp-cf7-slack-alerts >/dev/null
 
@@ -148,7 +158,7 @@ assert_equals "installed under the repo-style folder" \
 	"$(wp plugin get wp-cf7-slack-alerts --field=version | tr -d '\r')" "$PREVIOUS_VERSION"
 
 wp eval 'delete_site_transient( "update_plugins" ); delete_transient( "cf7sa_github_release" );' >/dev/null
-wp plugin update wp-cf7-slack-alerts 2>&1 | tail -3
+retry 3 wp plugin update wp-cf7-slack-alerts 2>&1 | tail -3 || true
 
 assert_equals "updated in place" \
 	"$(wp plugin get wp-cf7-slack-alerts --field=version | tr -d '\r')" "$LATEST_VERSION"
@@ -178,7 +188,7 @@ compose cp "$CF7SA_ROOT/dist/cf7-slack-error-alerts.zip" cli:/tmp/branch-build.z
 wp plugin deactivate wp-cf7-slack-alerts >/dev/null 2>&1 || true
 wp plugin delete wp-cf7-slack-alerts >/dev/null 2>&1 || true
 
-wp plugin install "$PREVIOUS_URL" --activate >/dev/null
+wp plugin install /tmp/previous.zip --activate >/dev/null
 wp option update cf7_slack_alerts_settings --format=json "$SEEDED_SETTINGS" >/dev/null
 assert_equals "back on $PREVIOUS_VERSION before the upgrade" \
 	"$(wp plugin get "$SLUG" --field=version | tr -d '\r')" "$PREVIOUS_VERSION"

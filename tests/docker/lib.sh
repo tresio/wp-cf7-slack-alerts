@@ -55,6 +55,29 @@ wp() {
 	compose exec -T cli wp --allow-root --path=/var/www/html "$@"
 }
 
+# retry <attempts> <command...>
+#
+# Network steps against GitHub fail intermittently on shared CI runners, and a
+# required check that flakes blocks merges at random.
+retry() {
+	local attempts="$1"
+	shift
+
+	local delay=3
+	local n=1
+
+	until "$@"; do
+		if (( n >= attempts )); then
+			echo "command failed after ${n} attempts: $*" >&2
+			return 1
+		fi
+		echo "attempt ${n} failed, retrying in ${delay}s" >&2
+		sleep "$delay"
+		n=$(( n + 1 ))
+		delay=$(( delay * 2 ))
+	done
+}
+
 # Wait for Apache to answer, so tests never race the container.
 wait_for_http() {
 	local tries=60
